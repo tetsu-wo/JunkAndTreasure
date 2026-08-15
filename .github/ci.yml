@@ -1,19 +1,64 @@
-name: CI (Test and Lint)
-on:
-  # mainブランチに対するプルリクエストが「作成・更新」された時に実行
-#  pull_request:
-#    branches:
-#      - main
+name: Fullstack CI (with Docker)
 
+on:
     push:
-      branches:
-        - main
-    # 💡 ベストプラクティス: 特定のファイルが「変わった時だけ」動かす
-    paths:
-      - 'src/**'            # アプリのソースコード
-      - 'package.json'      # 依存関係（Node.jsの場合。言語に合わせて変更）
-      - 'package-lock.json'
-    # 💡 ベストプラクティス: 逆に、このファイルが変わった時は「絶対に起動しない」
-    paths-ignore:
-      - '**.md'               # ドキュメント修正
-      - '.github/workflows/cd.yml' # ⬅ CDの修正ではCIを走らせない！
+      branches: [ main ]
+#  pull_request:
+#    branches: [ main ]
+    # 💡 Dockerfileの変更時にもCIが走るように対象を追加
+#    paths:
+#      - 'backend/**'
+#      - 'frontend/**'
+#      - 'docker-compose.yml'
+#  workflow_dispatch:
+
+jobs:
+  # --- Docker環境でバックエンドとフロントエンドをまとめてテスト ---
+  docker-fullstack-ci:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. コードのチェックアウト
+      - uses: actions/checkout@v4
+
+      # 2. Docker環境のセットアップ（ビルドの高速化に必要）
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. Docker Compose を使って全コンテナをビルド＆起動
+      # 💡 これにより、ローカルと全く同じDockerfile、同じ手順（sleep、型同期）で検証が走ります
+      - name: Build and Start Containers
+        env:
+          MYSQL_ROOT_PASSWORD: ci_password
+          MYSQL_DATABASE: mydb
+
+          SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/mydb?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Tokyo
+          SPRING_DATASOURCE_USERNAME: root
+          SPRING_DATASOURCE_PASSWORD: ci_password
+        run: |
+          docker compose up --build -d
+
+      - name: Wait for Database Initialization
+        run: |
+          echo "Waiting 25 seconds for MySQL to be fully ready..."
+          sleep 25
+
+      # 4. バックエンドの動作確認（必要に応じて追加）
+      # ※もしテストコードを走らせたい場合は、コンテナ内で実行させます
+      #      - name: Run Backend Tests inside Container
+      #        run: |
+      #          docker compose exec -T backend ./gradlew test
+
+      # 5. フロントエンドの検証（型同期やビルドが成功して、コンテナが生きているか確認）
+      - name: Check Frontend Container Status
+        run: |
+          # フロントエンドコンテナが正常に起動（Up）しているかステータスを確認
+          if [ "$(docker inspect -f '{{.State.Running}}' my_frontend)" != "true" ]; then
+            echo "Frontend container is not running!"
+            docker compose logs frontend
+            exit 1
+          fi
+
+      # 6. 後片付け
+      - name: Stop Containers
+        if: always() # 途中でエラーが起きても必ず実行する
+        run: docker compose down
