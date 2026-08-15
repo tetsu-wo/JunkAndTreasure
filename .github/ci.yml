@@ -1,8 +1,8 @@
 name: Fullstack CI (with Docker)
 
 on:
-    push:
-      branches: [ main ]
+  push:
+    branches: [ main ]
 #  pull_request:
 #    branches: [ main ]
     # 💡 Dockerfileの変更時にもCIが走るように対象を追加
