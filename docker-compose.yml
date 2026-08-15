@@ -1,0 +1,55 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: my_mysql
+    restart: always
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - DB_HOST=${DB_CONTAINER_NAME}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql # 名前付きボリュームでデータを死守
+    healthcheck:
+      # 【【確認】】パスワード直書きの為、直書きしない方法を検討する必要があり！！！
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s  # 初期化の猶予期間
+    networks:
+      - app-network
+
+
+  backend:
+    build: ./backend # backendフォルダのDockerfileをビルド
+    container_name: my-backend
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    container_name: my-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    # 👇 ここを追加（sh -c で型同期とNext.js起動を連続で実行）
+    command: sh -c "sleep 15 && npm run generate-api && npm run dev"
+    # ※「npm run generate」の部分は、お使いの package.json にある型同期コマンド（openapi-gen 等）に書き換える
+volumes:
+  db_data:
+
+networks:
+  app-network:
+    driver: bridge

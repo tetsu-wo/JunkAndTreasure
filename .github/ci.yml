@@ -1,0 +1,19 @@
+name: CI (Test and Lint)
+on:
+  # mainブランチに対するプルリクエストが「作成・更新」された時に実行
+#  pull_request:
+#    branches:
+#      - main
+
+    push:
+      branches:
+        - main
+    # 💡 ベストプラクティス: 特定のファイルが「変わった時だけ」動かす
+    paths:
+      - 'src/**'            # アプリのソースコード
+      - 'package.json'      # 依存関係（Node.jsの場合。言語に合わせて変更）
+      - 'package-lock.json'
+    # 💡 ベストプラクティス: 逆に、このファイルが変わった時は「絶対に起動しない」
+    paths-ignore:
+      - '**.md'               # ドキュメント修正
+      - '.github/workflows/cd.yml' # ⬅ CDの修正ではCIを走らせない！
